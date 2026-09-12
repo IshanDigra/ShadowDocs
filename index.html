@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>TicketDeck</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c9cff'/><rect x='7' y='9' width='18' height='3' rx='1.5' fill='%230f1115'/><rect x='7' y='15' width='13' height='3' rx='1.5' fill='%230f1115'/><rect x='7' y='21' width='10' height='3' rx='1.5' fill='%230f1115'/></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github-dark.min.css" id="hljs-dark">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github.min.css" id="hljs-light" media="not all">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div id="rail" class="rail"></div>
+      <div id="notehead">
+        <button id="btn-switch" class="nh-title" title="All tickets">
+          <span id="nh-title"></span><span class="caret"></span>
+        </button>
+        <span class="grow"></span>
+        <button id="btn-theme" class="ico" title="Toggle theme"></button>
+      </div>
+      <nav id="chips" class="rail chips" hidden></nav>
+    </header>
+    <main id="doc" tabindex="-1"></main>
+    <footer id="dock">
+      <button data-act="search"  class="dk"><span class="dk-i">p</span><span>Search</span></button>
+      <button data-act="outline" class="dk"><span class="dk-i">=</span><span>Outline</span></button>
+      <button data-act="fold"    class="dk"><span class="dk-i">g</span><span>Fold</span></button>
+    </footer>
+  </div>
+  <div id="scrim" hidden></div>
+  <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true"></div>
+  <div id="lightbox" hidden></div>
+  <div id="toasts"></div>
+
+  <script type="module">
+    import ...
+    window.marked = marked;
+    window.DOMPurify = DOMPurify;
+    window.hljs = hljs;
+    window.__loadMermaid = () => import('https://esm.sh/mermaid@11.4.0').then(m => m.default);
+    await import('./app.js');
+  </script>
+</body>
+</html>
