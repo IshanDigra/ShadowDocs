@@ -1,0 +1,24 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "A single-page app for the markdown notes you keep per JIRA ticket. Built to sit in a phone-width browser window beside your video call, so that when someone says *\"and what about PBLAT-5288?\"* you are one tap away instead of three files deep.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IshanDigra/ShadowDocs.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/IshanDigra/ShadowDocs/issues"
+  },
+  "homepage": "https://github.com/IshanDigra/ShadowDocs#readme",
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}
