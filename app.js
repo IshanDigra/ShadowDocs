@@ -122,7 +122,7 @@ async function mermaidInit() {
         : { ink: '#e6ebf5', dim: '#a8b3c7', accent: '#7c9cff', accentSoft: '#1f2a44',
             surface: '#1c212a', border: '#2a3140', bg: '#161a21' };
     mermaid.initialize({
-        startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true,
+        startOnLoad: false, securityLevel: 'loose', suppressErrorRendering: true,
         theme: 'base', fontFamily: getComputedStyle(document.body).fontFamily, fontSize: 13,
         themeVariables: {
             background: p.bg, primaryColor: p.accentSoft, primaryTextColor: p.ink, primaryBorderColor: p.accent,
@@ -425,7 +425,7 @@ function sheetSearch() {
             }
         };
         input.addEventListener('input', debounce(run, 100));
-        setTimeout(() => input.focus(), 0);
+        input.focus();
     }, { full: true });
 }
 
@@ -466,6 +466,7 @@ document.addEventListener('click', ev => {
 $('#lightbox').onclick = closeLightbox;
 $('#scrim').onclick = closeSheet;
 $('#btn-switch').onclick = sheetSwitcher;
+$('#fab-switch').onclick = sheetSwitcher;
 $('#btn-theme').onclick = toggleTheme;
 $('#dock').addEventListener('click', ev => {
     const b = ev.target.closest('.dk'); if (!b) return;
