@@ -253,10 +253,6 @@ function renderDoc() {
     enhance(inner);
     drawVisibleMermaid();
     renderChips();
-}doc.append(inner);
-    enhance(inner);
-    drawVisibleMermaid();
-    renderChips();
 }
 
 function sectionCard(note, sec) {
@@ -441,8 +437,8 @@ function applyTheme() {
     const t = UI.theme;
     const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    $('#hlis-dark').media = dark ? 'all' : 'not all';
-    $('#hlis-light').media = dark ? 'not all' : 'all';
+    $('#hljs-dark').media = dark ? 'all' : 'not all';
+    $('#hljs-light').media = dark ? 'not all' : 'all';
     $('#btn-theme').textContent = dark ? '☀' : '☾';
     restyleMermaid();
 }
