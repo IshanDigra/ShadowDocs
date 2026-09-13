@@ -27,38 +27,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.x'
+          node-version: '20'
       - name: Generate notes.json
-        run: |
-          cat << 'PY' > generate_json.py
-          import os
-          import json
-
-          notes_dir = 'notes'
-          notes = []
-
-          if os.path.exists(notes_dir):
-              for filename in os.listdir(notes_dir):
-                  if filename.endswith('.md'):
-                      filepath = os.path.join(notes_dir, filename)
-                      stat_info = os.stat(filepath)
-                      with open(filepath, 'r', encoding='utf-8') as f:
-                          content = f.read()
-
-                      notes.append({
-                          'id': filename[:-3],
-                          'content': content,
-                          'mtime': int(stat_info.st_mtime * 1000)
-                      })
-
-          with open('notes.json', 'w') as f:
-              json.dump({'notes': notes}, f)
-          print(f"Generated notes.json with {len(notes)} notes.")
-          PY
-          python3 generate_json.py
+        run: node build.js
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
