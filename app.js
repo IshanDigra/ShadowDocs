@@ -318,11 +318,13 @@ function openSheet(title, build, { full = false } = {}) {
     sheet.hidden = false;
     sheet.classList.toggle('full', full);
     $('#scrim').hidden = false;
-    const x = el('button', 'ico', 'x'); x.onclick = closeSheet;
     const head = el('div', 'sh-head', null,
-        el('div', 'sh-title', title), el('span', 'grow'), x);
+        el('div', 'sh-title', title), el('span', 'grow'));
     const body = el('div', 'sh-body');
-    sheet.append(el('div', 'sh-grip'), head, body);
+    const footerBtn = el('button', 'sh-footer-btn', 'Close');
+    footerBtn.onclick = closeSheet;
+    const footer = el('div', 'sh-footer', null, footerBtn);
+    sheet.append(el('div', 'sh-grip'), head, body, footer);
     build(body, head);
 }
 
@@ -395,7 +397,14 @@ function sheetSearch() {
     openSheet('Search', (body, head) => {
         const input = el('input', 'sr-input');
         input.type = 'search'; input.placeholder = 'Search all tickets...';
-        $('.sh-title', head).replaceWith(input);
+
+        const clearBtn = el('button', 'sr-clear', '×');
+        clearBtn.type = 'button';
+        clearBtn.onclick = () => { input.value = ''; clearBtn.style.display = 'none'; input.focus(); run(); };
+        clearBtn.style.display = 'none';
+
+        const wrap = el('div', 'sr-wrap', null, input, clearBtn);
+        $('.sh-title', head).replaceWith(wrap);
         const results = el('div');
         body.append(results);
         const run = () => {
@@ -424,7 +433,11 @@ function sheetSearch() {
                 });
             }
         };
-        input.addEventListener('input', debounce(run, 100));
+        const debouncedRun = debounce(run, 100);
+        input.addEventListener('input', (e) => {
+            clearBtn.style.display = e.target.value ? 'grid' : 'none';
+            debouncedRun();
+        });
         input.focus();
     }, { full: true });
 }
