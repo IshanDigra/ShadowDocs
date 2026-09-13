@@ -479,7 +479,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 // ------------------------------------------------------------------ load
 async function reload() {
     try {
-        const res = await (await fetch('api/notes')).json();
+        const res = await (await fetch('notes.json')).json();
         S.offline = false;
         const notes = sortNotes(res.notes.map(hydrate));
         S.notes = notes; S.byId = new Map(notes.map(n => [n.id, n]));
@@ -494,7 +494,7 @@ async function reload() {
 async function poll() {
     if (document.hidden || !$('#sheet').hidden) return;
     try {
-        const res = await (await fetch('api/notes')).json();
+        const res = await (await fetch('notes.json')).json();
         const sameSet = res.notes.length === S.notes.length && res.notes.every(n => S.byId.has(n.id));
         if (!sameSet) { await reload(); toast('Notes folder changed'); return; }
         const changed = res.notes.filter(r => S.byId.get(r.id).mtime !== r.mtime).map(r => r.id);
