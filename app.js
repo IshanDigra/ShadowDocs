@@ -101,8 +101,15 @@ function buildDoc(body) {
 
 const firstH1 = body => (/^#\s+(.+?)\s*#*\s*$/m.exec(body) || [])[1]?.trim() || null;
 
-const mdToHtml = src => DOMPurify.sanitize(marked.parse(String(src || ''), { gfm: true }),
-    { ADD_ATTR: ['target', 'rel', 'align', 'colspan', 'rowspan', 'start', 'checked', 'disabled'] });
+const mdToHtml = src => {
+    const renderer = new marked.Renderer();
+    renderer.image = ({ href, title, text }) => {
+        const url = (href && !href.startsWith('http') && !href.startsWith('data:') && !href.startsWith('/')) ? 'notes/' + href : href;
+        return `<img src="${url}" alt="${text || ''}" title="${title || ''}">`;
+    };
+    return DOMPurify.sanitize(marked.parse(String(src || ''), { gfm: true, renderer }),
+        { ADD_ATTR: ['target', 'rel', 'align', 'colspan', 'rowspan', 'start', 'checked', 'disabled'] });
+};
 
 // ------------------------------------------------------------------ mermaid
 let mermaidPromise = null, mermaidSeq = 0;
@@ -479,7 +486,9 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 // ------------------------------------------------------------------ load
 async function reload() {
     try {
-        const res = await (await fetch('notes.json')).json();
+        const response = await fetch('notes.json');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const res = await response.json();
         S.offline = false;
         const notes = sortNotes(res.notes.map(hydrate));
         S.notes = notes; S.byId = new Map(notes.map(n => [n.id, n]));
@@ -494,7 +503,9 @@ async function reload() {
 async function poll() {
     if (document.hidden || !$('#sheet').hidden) return;
     try {
-        const res = await (await fetch('notes.json')).json();
+        const response = await fetch('notes.json');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const res = await response.json();
         const sameSet = res.notes.length === S.notes.length && res.notes.every(n => S.byId.has(n.id));
         if (!sameSet) { await reload(); toast('Notes folder changed'); return; }
         const changed = res.notes.filter(r => S.byId.get(r.id).mtime !== r.mtime).map(r => r.id);
