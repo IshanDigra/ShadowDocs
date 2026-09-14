@@ -1,5 +1,6 @@
-# Production Support Agent
-This document provides an end-to-end understanding of the Production Support Agent project, tailored for an SDE-2 interview depth. It thoroughly covers systemic validation, structural system designs, and edge-case mitigation strategies. Additionally, it includes targeted interview cross-questions and answers to ensure complete preparedness for deep-dive architectural discussions.
+# DynaCode: Agentic Dynamic Code Analyzer
+
+This document serves as an end-to-end understanding of the project, tailored for an SDE-2 depth, covering systemic validation, structural designs, edge-case mitigation, and interview cross-questions. It provides a comprehensive blueprint to clearly articulate architectural trade-offs, system resilience, and business impact during technical interviews.
 
 ## Table of Contents
 * [STAR & Project Context](#star--project-context)
@@ -10,114 +11,110 @@ This document provides an end-to-end understanding of the Production Support Age
 * [Question Bank & Strategies](#question-bank--strategies)
 
 ## STAR & Project Context
-* **What is Production Support Agent:** An automated, event-driven AI chatbot designed to accelerate incident response by instantly correlating active production failures with historical fixes and system runbooks.
-* **Situation:** Legacy systems in our organization had a steep learning curve. On-call engineers were wasting hours digging through past Jiras, static runbooks, and historical Teams chats just to gather context on recurring production failures, leading to high Mean Time to Resolution (MTTR).
-* **Task:** The objective was to eliminate manual toil and drastically reduce the time from alert to investigation by automating the context-gathering and initial diagnostic phase.
-* **Action:** I architected and built an event-driven chatbot that intercepts failure webhooks via a message queue. It gathers system logs and queries a vector database (pre-indexed with past Jiras and runbooks) to provide Retrieval-Augmented Generation (RAG) context to an LLM. The LLM then synthesizes a highly contextualized Root Cause Analysis (RCA).
-* **Result:** This automation significantly cut down the TTR for the entire production support team by eliminating the need to investigate recurring, known issues from scratch. Engineers now receive alerts with historical fixes already attached.
-* **Why we did it (Motivation & Trade-offs):** We chose an asynchronous, queue-based RAG architecture over a synchronous API design to guarantee we never block or impact the underlying monitored legacy systems. We accepted the trade-off of a slight processing delay (seconds for LLM generation) in exchange for highly accurate, actionable RCA outputs.
-* **What else we could have done (Alternatives):** We considered relying entirely on standard log-based alerting (e.g., Elasticsearch/Kibana watch rules) with static links to runbooks. This was discarded because it still required the on-call engineer to manually read the runbook, mentally correlate it to the specific stack trace, and search for edge cases, missing the synthesis value that an LLM provides.
+
+*   **What is DynaCode:** A Kubernetes sidecar-based diagnostic tool that dynamically analyzes production applications to detect and resolve concurrency and memory issues using AI, without disrupting live traffic.
+*   **Situation:** Debugging live applications by capturing full heap or thread dumps on the main application thread risked triggering long garbage collection (GC) pauses, locking up the JVM, and causing cascading out-of-memory (OOM) pod evictions. Meanwhile, standard static code analysis could not catch complex runtime issues like deadlocks.
+*   **Task:** Build a safe, non-disruptive diagnostic agent for critical production services that could capture thread and memory states, identify complex concurrency bottlenecks, and propose fixes without impacting user traffic.
+*   **Action:** We implemented a Kubernetes sidecar pattern with strictly isolated resource limits (cgroups) to safely extract JVM dumps (`jcmd`/`jstack`). We then built a deterministic scrubbing pipeline to strip PII and idle threads, feeding only the highly focused, sanitized bottleneck data to an internal LLM agent.
+*   **Result:** The system successfully identified root causes for deadlocks and memory leaks in live environments, automatically generated remediation patches, caused zero degradation to live traffic, and won 1st place in a firmwide hackathon.
+*   **Why we did it (Motivation & Trade-offs):** We chose a sidecar architecture to guarantee strict hardware resource isolation. By forcing heavy I/O operations (like writing massive thread dumps) to run against the sidecar's resource quotas, we accepted the trade-off of slightly higher base memory usage per pod in exchange for absolute protection against main-app OOM crashes.
+*   **What else we could have done (Alternatives):** We considered deploying a DaemonSet on the Kubernetes nodes for global observability. However, this was discarded because DaemonSets lack the granular, shared filesystem and PID namespace access required to easily trigger native JVM tools against a specific application container without highly complex, elevated security privileges and host-path mounts. We also considered an in-app APM library, but discarded it as it would share the JVM heap, defeating the purpose of isolating the diagnostic overhead.
 
 ## End-to-End System Architecture
 
-* **Phase 1: Alert Trigger & Ingestion**
-  * **Event/Trigger:** A process monitoring daemon (e.g., Procmon) detects a failure, error thrown, or threshold breach in the legacy app.
-  * **Action/Mechanism:** The monitor fires a webhook payload into a central Message Queue (MQ) buffer, decoupling the alerting mechanism from the chatbot processor.
-  * **Benefit/Result:** Provides fault tolerance. If the chatbot goes down or the LLM API is rate-limited, alerts queue up safely without crashing the legacy system's monitoring daemon.
+*   **Phase 1: Anomalous Event Trigger & Extraction**
+    *   **Event/Trigger:** System metrics (e.g., latency spikes, memory threshold breaches) trigger a diagnostic capture.
+    *   **Action/Mechanism:** The sidecar executes `jstack` or `jcmd` via the shared PID namespace to capture the application's current thread/heap state into a shared volume.
+    *   **Benefit/Result:** Operates out-of-band from the main application thread, ensuring zero computational overhead is added to the request-handling process.
 
-* **Phase 2: Context Aggregation (RAG)**
-  * **Event/Trigger:** The Chatbot Orchestrator consumes the alert payload from the message queue.
-  * **Action/Mechanism:** The orchestrator concurrently fetches raw system logs and embeddings of the error signature to query the Vector DB (using K-Nearest Neighbors). This retrieves relevant chunks of past resolved Jiras, SOPs, and Teams chats.
-  * **Benefit/Result:** Replaces slow, manual string matching with high-speed semantic search, providing the LLM with exact, factual historical data for the specific error.
+*   **Phase 2: Deterministic Data Scrubbing**
+    *   **Event/Trigger:** Raw dump files are written to the shared filesystem.
+    *   **Action/Mechanism:** A highly optimized script parses the dump, stripping out `RUNNABLE` and idle threads, keeping only threads in `BLOCKED` or `WAITING` states. It applies regex masking to scrub sensitive object fields and PII.
+    *   **Benefit/Result:** Drastically reduces the payload size to fit within an LLM's context window while strictly enforcing data privacy and compliance.
 
-* **Phase 3: Synthesis & Evaluation**
-  * **Event/Trigger:** Aggregated raw logs and vector search results are packaged into a prompt.
-  * **Action/Mechanism:** The payload is sent to the LLM Synthesis Engine with strict prompting guardrails that force the model to answer *only* using the provided context. A Hallucination Check evaluates the confidence and relevance of the match.
-  * **Benefit/Result:** Automates the cognitive heavy lifting of correlating a fresh stack trace to a historical runbook step.
+*   **Phase 3: Agentic Evaluation**
+    *   **Event/Trigger:** The sanitized, minimized bottleneck payload is ready.
+    *   **Action/Mechanism:** The sidecar acts as a client, making an asynchronous, circuit-broken API call to an internal LLM endpoint with the payload and a strict diagnostic prompt.
+    *   **Benefit/Result:** Offloads heavy cognitive debugging work, rapidly identifying complex race conditions, lock ordering issues, or memory leaks that are difficult for humans to spot.
 
-* **Phase 4: Fallback & Notification**
-  * **Event/Trigger:** The hallucination guardrail returns a pass (High Confidence) or fail (Low Confidence/No Match).
-  * **Action/Mechanism:** On high confidence, it pushes a highly contextualized RCA with historical fixes to the Jira/Teams API. On low confidence, a fail-safe triggers, pushing *only* the raw logs.
-  * **Benefit/Result:** Ensures zero hallucination in a critical production environment. Engineers are never misled by an AI guessing an incorrect fix.
+*   **Phase 4: Remediation & Fallback (Human-in-the-Loop)**
+    *   **Event/Trigger:** The LLM returns a proposed code fix.
+    *   **Action/Mechanism:** Instead of auto-deploying, the system generates a formal Pull/Merge Request detailing the issue, the blocked monitor objects, and the proposed patch.
+    *   **Benefit/Result:** Adheres to a "fail-safe" philosophy. By enforcing standard CI/CD checks and human code review, we mitigate the risk of AI hallucinations breaking production systems.
 
 ## HLD (High-Level Design)
 
 ```mermaid
-flowchart TD
-    %% Define styles
-    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000
-    classDef queue fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
-    classDef agent fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
-    classDef data fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
-    classDef output fill:#ffebee,stroke:#b71c1c,stroke-width:2px,color:#000
-
-    subgraph Monitored Environment
-        App[Legacy System Jobs]:::system -->|Fails/Throws Error| Procmon[Monitoring Daemon]:::system
-    end
-
-    Procmon -->|Triggers Webhook| MQ[Message Queue / Buffer]:::queue
-
-    subgraph Production Support Chatbot
-        MQ -->|Consumes Alert Payload| Pipeline[Chatbot Orchestrator]:::agent
-        
-        Pipeline -->|1. Fetch process logs| Logs[(Raw System Logs)]:::data
-        Pipeline -->|2. Query error signature| VDB[(Vector Database)]:::data
-        
-        subgraph Indexed Knowledge Base
-            VDB --- Jiras[Past Resolved Jiras]
-            VDB --- Runbooks[SOPs & Runbooks]
-            VDB --- Chats[Historical Teams Chats]
+graph TD
+    subgraph Kubernetes Pod [Kubernetes Pod - Strict cgroup Boundary]
+        direction TB
+        subgraph Main App
+            A[Live User Traffic] --> B(Main Java App)
         end
         
-        Logs --> Context[Aggregated Context Payload]
-        VDB -->|Returns Similarity Match| Context
+        subgraph DynaCode Sidecar [DynaCode Sidecar Container]
+            C[Dump Extractor] 
+            D[Deterministic Scrubber]
+            E[Agent Client]
+            
+            C -->|Raw Dump| D
+            D -->|Sanitized Payload| E
+        end
         
-        Context --> LLM{LLM Synthesis Engine}:::agent
-        LLM -->|Strict Prompting Guardrails| Guardrails[Hallucination Check]:::agent
+        B -.->|Shared PID / jstack / jcmd| C
     end
 
-    Guardrails -->|High Confidence Match| RCA[Contextualized RCA + Fix]:::output
-    Guardrails -->|Low Confidence / No Match| Raw[Fallback: Raw Logs Only]:::output
-    
-    RCA --> JiraAPI[Jira / Teams Alert API]:::output
-    Raw --> JiraAPI:::output
+    F((Internal LLM API))
+    G[(Version Control / CI/CD)]
+
+    E -- HTTPS / Async API Call --> F
+    F -- Remediation Patch --> E
+    E -- Creates PR --> G
+
+    classDef mainApp fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef sideCar fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef external fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+
+    class B mainApp;
+    class C,D,E sideCar;
+    class F,G external;
 ```
 
 ## Deep Dive (Resilience & Scale)
 
-### Asynchronous Decoupling & Backpressure (Fail-Safe Mechanism)
-To prevent the monitoring daemon from impacting the host application, the entire ingestion pipeline is decoupled using a Message Broker (like RabbitMQ or Kafka). If the downstream LLM API experiences rate limiting or an outage, the messages simply buffer in the queue. We implemented a robust backpressure mechanism so that the Chatbot Orchestrator only pulls messages it has the compute capacity to process, guaranteeing system stability during alert storms.
+### Linux Cgroups & Blast Radius Isolation
+To ensure production stability, the system heavily relies on container orchestration primitives. By deploying DynaCode as a sidecar, Kubernetes applies separate Linux control groups (cgroups) to the diagnostic tools. If extracting a 4GB heap dump causes a memory spike, the OOM killer will exclusively target and restart the sidecar container, leaving the main Java app and its live traffic completely unaffected. This is a classic "bulkhead" pattern at the infrastructure level.
 
-### Idempotency & Alert Debouncing
-Production systems often experience cascading failures, resulting in hundreds of identical alerts firing per minute. To avoid rate-limiting our LLM and spamming the engineering team, the Chatbot Orchestrator implements idempotency. We generate a SHA-256 hash based on the error signature and the originating service. Using a distributed cache (like Redis), we set a TTL (e.g., 15 minutes). If the same hash arrives within the TTL, the event is acknowledged in the queue and dropped, preventing duplicate RCA generation.
+### Deterministic Noise Reduction & Token Optimization
+LLMs suffer from degraded reasoning (hallucinations) when fed massive, unstructured text like a 100,000-line thread dump. The system scales its analytical capability by relying on a deterministic pre-processing layer. By programmatically dropping `RUNNABLE` threads and extracting only `BLOCKED` threads and their associated object monitors, the system performs an O(N) reduction on data size. This guarantees the payload stays well within the LLM token limits, reduces API latency, and improves the accuracy of the AI's root-cause analysis.
 
-### Graceful Degradation & Hallucination Guardrails
-In incident response, a wrong answer is worse than no answer. The system is designed to "fail open" to human intervention. We implemented strict confidence thresholds on the Vector DB similarity search (e.g., cosine similarity > 0.85). If the retrieved context falls below this threshold, the system gracefully degrades: it completely bypasses the LLM synthesis and ships the raw logs directly to the Teams API. This ensures the system acts as a standard alerting pipeline when it encounters novel issues.
+### Asynchronous Decoupling & Circuit Breaking
+The connection between the Agent Client and the LLM API is designed to fail gracefully. If the internal LLM API goes down or experiences high latency, the Agent Client utilizes a Circuit Breaker pattern. It will fail-open (stop sending requests) and simply log the parsed thread dump to standard observability tools (like Splunk/Datadog) without blocking the sidecar's event loop or endlessly retrying, ensuring network threads aren't exhausted.
 
 ## Testing & Validation 
 
-1. **Unit & Integration Testing:** We utilized WireMock to simulate external dependencies like the Jira API, Teams webhook, and the LLM API. This allowed us to validate the Chatbot Orchestrator's internal logic, prompting construction, and JSON parsing without incurring API costs.
-2. **Resilience Testing:** We intentionally injected faults into our staging environment to test fail-safes. We simulated 500/503 HTTP errors from the LLM endpoint to ensure the system fell back to raw logs, and we crashed the Chatbot orchestrator to verify that the Message Queue retained alert payloads without data loss.
-3. **Concurrency & Load Testing:** We used load-testing tools (like JMeter/Locust) to blast the webhook endpoint with 1,000+ simultaneous alerts. This validated our Redis-based deduplication/idempotency logic (ensuring no race conditions occurred when setting the cache lock) and confirmed that our message queue successfully throttled the consumption rate to stay within our LLM API limits.
+1. **Unit & Integration Testing:** We utilized WireMock to simulate the external LLM API, ensuring the Agent Client correctly handled JSON parsing, timeouts, and retries. We also wrote unit tests for the deterministic scrubber against static, known thread dumps to verify PII regex masking was 100% effective.
+2. **Resilience Testing (Chaos Engineering):** We intentionally constrained the sidecar's memory limits in a staging environment and triggered massive heap dumps. This validated that when the sidecar hit an OOM state, the Kubernetes scheduler restarted only the sidecar, while the main application container continued serving HTTP 200 responses without latency spikes.
+3. **Concurrency Testing:** We deployed a dummy application configured with an intentional, easily triggered deadlock (Thread A waiting on Lock 1 holding Lock 2; Thread B waiting on Lock 2 holding Lock 1). We subjected it to high load using JMeter to ensure the sidecar correctly identified the exact lock monitors involved in the race condition.
 
 ## Question Bank & Strategies
 
-### 1. "How do you prevent the LLM from hallucinating incorrect remediation steps?"
-* **Strategy:** Highlight strict RAG guardrails, prompting techniques, and confidence thresholds.
-* **Sample Answer:** "We rely on a strict Retrieval-Augmented Generation pipeline. I designed the system so the LLM is prompted to only use the retrieved runbooks and past Jira resolutions, explicitly instructing it to never rely on its internal memory. If the similarity search score from the Vector DB is too low—meaning we haven't seen this exact issue before—the system gracefully degrades. It safely defaults to providing the raw aggregated logs to the engineers without attempting to guess a fix."
+**Q1: Why use a sidecar pattern? Why not a DaemonSet on the node or just an APM library inside the app?**
+*   **Strategy:** The interviewer is looking for your understanding of resource isolation (cgroups) vs. shared state, and deployment trade-offs in distributed systems.
+*   **Sample Answer:** "In a previous iteration of my thought process, I considered an APM library, but taking a heavy dump inside the app shares the JVM resources and can easily cause an OOM crash on the main thread. A DaemonSet provides good isolation at the node level, but it lacks the shared network and PID namespaces required to easily execute tools like `jstack` against a specific pod. I chose the sidecar pattern because it perfectly balances these needs: it shares the pod's namespace to easily extract data, but it operates under its own resource quotas, guaranteeing that the main application's CPU and heap remain completely insulated from our diagnostic overhead."
 
-### 2. "How does the bot gather context efficiently during an active incident?"
-* **Strategy:** Focus on pre-indexing and fast retrieval mechanisms over manual or real-time brute-force searching.
-* **Sample Answer:** "Knowing that manual string matching across logs and old Jiras is far too slow during an outage, I implemented a pre-indexing strategy. We chunk and embed historical Jiras, Teams discussions, and SOPs into a vector database asynchronously. When an alert fires, the bot instantly embeds the error signature and executes a highly optimized K-Nearest Neighbors search. This allows the system to pull up the exact historical fix with sub-second latency."
+**Q2: How do you prevent the AI from hallucinating or hitting token limits when processing massive thread dumps?**
+*   **Strategy:** Demonstrate understanding of LLM limitations (context windows, noise-to-signal ratio) and how traditional algorithmic programming supports AI.
+*   **Sample Answer:** "I realized early on that feeding raw, 100,000-line thread dumps to an LLM would result in token exhaustion and severe hallucinations. To solve this, I introduced a deterministic pre-processing phase. Before the LLM ever sees the data, a script parses the dump, strips out all idle and `RUNNABLE` threads, and extracts only the threads stuck in `BLOCKED` or `WAITING` states, along with their lock monitors. This brought the payload down to just a few hundred lines of high-signal data. By doing the heavy lifting deterministically, the AI only processes the actual bottleneck, which drastically improved patch accuracy and kept us well under token limits."
 
-### 3. "What happens if the webhook fails or the chatbot itself goes down?"
-* **Strategy:** Demonstrate an understanding of fault tolerance, system decoupling, and buffering.
-* **Sample Answer:** "I decoupled the chatbot from the actual legacy monitoring systems using a message queue buffer. If the bot goes down or if our LLM provider has an outage, the webhook payloads simply queue up safely in the broker. Crucially, the monitoring agent itself isn't blocked by synchronous API timeouts, ensuring we don't accidentally impact the performance of the host application we are trying to monitor."
+**Q3: Taking a heap dump in production is a massive security risk due to PII in memory. How did you architect the system to handle this?**
+*   **Strategy:** Show a strict adherence to security boundaries, zero-trust principles, and data sanitization before data leaves the environment.
+*   **Sample Answer:** "Security was a primary constraint. First, for our MVP, we relied heavily on Thread Dumps, which primarily expose class paths and lock states rather than in-memory user data. However, to support deeper heap analysis, I implemented a strict scrubbing layer inside the sidecar itself. The sidecar uses regex-based masking to scrub known sensitive string patterns and object fields before the data ever leaves the pod's network boundary. Furthermore, I designed this to integrate exclusively with our firm-hosted, internal LLM, ensuring that no sanitized data, let alone PII, ever crosses the public internet."
 
-### 4. "How did you measure the reduction in Time to Resolution (TTR)?"
-* **Strategy:** Focus on defining metrics logically and eliminating the manual 'hunting and gathering' phase.
-* **Sample Answer:** "Before rolling out the bot, we baselined the manual process: calculating the average time it took an engineer to acknowledge an alert, log into the server, pull logs, and search Jira history. After deployment, we tracked the time from alert generation to the first active remediation step. By attaching the logs and historical fixes directly to the alert payload, that entire context-gathering phase was eliminated, which drastically cut down the initial investigation time."
+**Q4: What if the AI generates a code fix that introduces a new bug or an even worse concurrency issue?**
+*   **Strategy:** Highlight your understanding of CI/CD, human-in-the-loop systems, and fail-safe deployment practices.
+*   **Sample Answer:** "I treated the AI strictly as an advanced diagnostic assistant, not an automated deployment tool. To mitigate the risk of hallucinatory code, I architected the final phase of the system to generate a proposed Pull Request rather than merging directly. The PR includes the diagnostic context, the blocked threads, and the AI's suggested patch. This forces the code to run through our existing CI/CD integration tests and requires a mandatory human code review. This fail-safe ensures we get the speed of AI debugging without compromising our production stability gates."
 
-### 5. "Production errors often cascade. How did you handle 'alert storms' to prevent overwhelming the LLM and the engineers?"
-* **Strategy:** Explain deduplication, idempotency keys, and distributed caching to prevent system flooding.
-* **Sample Answer:** "During early testing, a single database connection drop triggered hundreds of identical alerts in seconds, threatening to rate-limit our LLM. I solved this by implementing an idempotency layer using Redis. When an alert is ingested, the orchestrator generates a SHA-256 hash of the error signature and service name. If that hash already exists in Redis within a 15-minute TTL, we simply acknowledge and drop the duplicate message in the queue, completely protecting our downstream LLM and keeping the Teams channel noise-free."
+**Q5: How do you manage the lifecycle of these dump files? If the sidecar triggers dumps frequently, won't you run out of disk space on the node?**
+*   **Strategy:** Demonstrate operational maturity by anticipating infrastructure degradation over time (e.g., disk exhaustion).
+*   **Sample Answer:** "That was a major operational risk we had to design for. Unchecked file generation will quickly exhaust the `emptyDir` volume and cause pod eviction. To prevent this, I configured the sidecar's local storage as an ephemeral volume with a strict size limit. Additionally, I implemented an automated log-rotation and cleanup script running as a cron job inside the sidecar. Once a dump is parsed, scrubbed, and successfully sent to the AI, the raw, massive dump file is immediately deleted. If the AI API is down, older dumps are evicted based on a FIFO policy to ensure disk utilization never exceeds 80%."
