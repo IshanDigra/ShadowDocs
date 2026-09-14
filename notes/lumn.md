@@ -39,23 +39,18 @@ Below is the detailed architectural flow of how the chatbot intercepts failures,
 ```mermaid
 flowchart TD
     %% Define styles
-    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef queue fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef agent fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-    classDef data fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef output fill:#ffebee,stroke:#b71c1c,stroke-width:2px
 
     subgraph Monitored Environment
-        App[Legacy System Jobs]:::system -->|Fails/Throws Error| Procmon[Monitoring Daemon]:::system
+        App[Legacy System Jobs] -->|Fails/Throws Error| Procmon[Monitoring Daemon]
     end
 
-    Procmon -->|Triggers Webhook| MQ[Message Queue / Buffer]:::queue
+    Procmon -->|Triggers Webhook| MQ[Message Queue / Buffer]
 
     subgraph Production Support Chatbot
-        MQ -->|Consumes Alert Payload| Pipeline[Chatbot Orchestrator]:::agent
+        MQ -->|Consumes Alert Payload| Pipeline[Chatbot Orchestrator]
         
-        Pipeline -->|1. Fetch process logs| Logs[(Raw System Logs)]:::data
-        Pipeline -->|2. Query error signature| VDB[(Vector Database)]:::data
+        Pipeline -->|1. Fetch process logs| Logs[(Raw System Logs)]
+        Pipeline -->|2. Query error signature| VDB[(Vector Database)]
         
         subgraph Indexed Knowledge Base
             VDB --- Jiras[Past Resolved Jiras]
@@ -66,14 +61,14 @@ flowchart TD
         Logs --> Context[Aggregated Context Payload]
         VDB -->|Returns Similarity Match| Context
         
-        Context --> LLM{LLM Synthesis Engine}:::agent
-        LLM -->|Strict Prompting Guardrails| Guardrails[Hallucination Check]:::agent
+        Context --> LLM{LLM Synthesis Engine}
+        LLM -->|Strict Prompting Guardrails| Guardrails[Hallucination Check]
     end
 
-    Guardrails -->|High Confidence Match| RCA[Highly Contextualized RCA with Historical Fix]:::output
-    Guardrails -->|Low Confidence / No Match| Raw[Fallback: Raw Logs Only, No Fix Guessed]:::output
+    Guardrails -->|High Confidence Match| RCA[Highly Contextualized RCA with Historical Fix]
+    Guardrails -->|Low Confidence / No Match| Raw[Fallback: Raw Logs Only, No Fix Guessed]
     
-    RCA --> JiraAPI[Jira / Teams Alert API]:::output
+    RCA --> JiraAPI[Jira / Teams Alert API]
     Raw --> JiraAPI
 ```
 

@@ -83,10 +83,6 @@ graph TD
 
     TASK -.->|9. Manager Approves| CLOSE
 
-    style SVC fill:#eb6c36,stroke:#333,stroke-width:2px,color:#fff
-    style WORKER fill:#eb6c36,stroke:#333,stroke-width:2px,color:#fff
-    style EXT fill:#fcfcfc,stroke:#4f5d75,stroke-width:2px
-    style DB fill:#fcfcfc,stroke:#4f5d75,stroke-width:2px
 ```
 
 ---

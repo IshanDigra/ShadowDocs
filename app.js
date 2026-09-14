@@ -117,10 +117,10 @@ async function mermaidInit() {
     const mermaid = await (mermaidPromise ??= window.__loadMermaid());
     const light = document.documentElement.dataset.theme === 'light';
     const p = light
-        ? { ink: '#0f172a', dim: '#4b5563', accent: '#2f55d4', accentSoft: '#e7edff',
-            surface: '#f2f4f8', border: '#d7dde6', bg: '#ffffff' }
-        : { ink: '#e6ebf5', dim: '#a8b3c7', accent: '#7c9cff', accentSoft: '#1f2a44',
-            surface: '#1c212a', border: '#2a3140', bg: '#161a21' };
+        ? { ink: '#09090b', dim: '#71717a', accent: '#18181b', accentSoft: '#f4f4f5',
+            surface: '#f4f4f5', border: '#e4e4e7', bg: '#ffffff' }
+        : { ink: '#fafafa', dim: '#a1a1aa', accent: '#fafafa', accentSoft: '#27272a',
+            surface: '#18181b', border: '#27272a', bg: '#09090b' };
     mermaid.initialize({
         startOnLoad: false, securityLevel: 'loose', suppressErrorRendering: true,
         theme: 'base', fontFamily: getComputedStyle(document.body).fontFamily, fontSize: 13,

@@ -59,13 +59,7 @@ graph TD
     Actor -->|Corrects & Signs Off| FinalDoc
 
     %% Styling
-    classDef primary fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    classDef actor fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
-    classDef endpoint fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
     
-    class Actor actor;
-    class FinalDoc endpoint;
-    class ExtTool,ACL,ValEngine,TempEngine,Storage,UI primary;
 ```
 
 ### Core Components Illustrated:
