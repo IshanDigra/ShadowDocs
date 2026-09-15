@@ -445,12 +445,27 @@ function sheetSearch() {
 // ------------------------------------------------------------------ lightbox
 function openLightbox(src) {
     const box = $('#lightbox');
-    box.hidden = false; box.innerHTML = '';
+    const wrap = $('#lb-wrap');
+    box.hidden = false;
+    wrap.innerHTML = '';
+    wrap.classList.remove('zoomed');
+    $('#lb-zoom-i').textContent = '＋';
     const clone = src.cloneNode(true);
-    clone.style.maxWidth = 'none';
-    box.append(clone);
+    clone.style.maxWidth = '';
+    clone.style.maxHeight = '';
+    clone.style.width = '';
+    clone.style.height = '';
+    wrap.append(clone);
 }
-const closeLightbox = () => { $('#lightbox').hidden = true; $('#lightbox').innerHTML = ''; };
+const closeLightbox = () => {
+    $('#lightbox').hidden = true;
+    $('#lb-wrap').innerHTML = '';
+};
+const toggleZoom = () => {
+    const wrap = $('#lb-wrap');
+    wrap.classList.toggle('zoomed');
+    $('#lb-zoom-i').textContent = wrap.classList.contains('zoomed') ? '−' : '＋';
+};
 
 // ------------------------------------------------------------------ appearance
 function applyTheme() {
@@ -476,7 +491,22 @@ document.addEventListener('click', ev => {
     if (diagram) { const svg = $('svg', diagram); if (svg) openLightbox(svg); }
 });
 
-$('#lightbox').onclick = closeLightbox;
+$('#lb-close').onclick = closeLightbox;
+$('#lb-zoom').onclick = toggleZoom;
+$('#lb-wrap').onclick = (ev) => {
+    if (ev.target === $('#lb-wrap')) closeLightbox();
+};
+
+let lastTap = 0;
+$('#lb-wrap').addEventListener('touchstart', (ev) => {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+        ev.preventDefault();
+        toggleZoom();
+    }
+    lastTap = now;
+}, { passive: false });
+
 $('#scrim').onclick = closeSheet;
 $('#btn-switch').onclick = sheetSwitcher;
 $('#fab-switch').onclick = sheetSwitcher;
