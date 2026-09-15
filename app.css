@@ -286,3 +286,13 @@ button:active { transform: scale(0.97); }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
 }
+.sh-sort {
+  margin-left: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  font-size: 0.9em;
+  cursor: pointer;
+}

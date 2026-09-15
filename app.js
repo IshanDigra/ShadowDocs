@@ -35,7 +35,7 @@ function toast(msg, tone = '') {
 
 // ------------------------------------------------------------------ prefs / state
 const LS_KEY = 'ticketdeck.v2';
-const UI = Object.assign({ theme: 'auto', star: [], last: null, fold: {} },
+const UI = Object.assign({ theme: 'auto', star: [], last: null, fold: {}, sort: 'alpha' },
     (() => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; } })());
 const persist = debounce(() => {
     try { localStorage.setItem(LS_KEY, JSON.stringify(UI)); } catch {}
@@ -200,7 +200,11 @@ function hydrate(raw) {
 const active = () => S.byId.get(S.activeId) || null;
 const sortNotes = list => list.sort((a, b) => {
     const sa = UI.star.includes(a.id) ? 0 : 1, sb = UI.star.includes(b.id) ? 0 : 1;
-    return (sa - sb) || a.ticket.localeCompare(b.ticket, undefined, { numeric: true });
+    if (sa !== sb) return sa - sb;
+    if (UI.sort === 'recent') {
+        return (b.mtime || 0) - (a.mtime || 0);
+    }
+    return a.ticket.localeCompare(b.ticket, undefined, { numeric: true });
 });
 
 // ------------------------------------------------------------------ rendering
@@ -330,7 +334,29 @@ function openSheet(title, build, { full = false } = {}) {
 
 // switcher
 function sheetSwitcher() {
-    openSheet('Tickets', body => {
+    openSheet('Tickets', (body, head) => {
+        const select = el('select', 'sh-sort');
+        const optAlpha = el('option', null, 'Alphabetical');
+        optAlpha.value = 'alpha';
+        const optRecent = el('option', null, 'Recent');
+        optRecent.value = 'recent';
+        select.append(optAlpha, optRecent);
+        select.value = UI.sort || 'alpha';
+        select.onchange = (e) => {
+            UI.sort = e.target.value;
+            persist();
+            S.notes = sortNotes([...S.byId.values()]);
+            renderRail();
+            closeSheet();
+            sheetSwitcher();
+        };
+        const titleEl = $('.sh-title', head);
+        if (titleEl) {
+            titleEl.after(select);
+        } else {
+            head.append(select);
+        }
+
         if (!S.notes.length) return body.append(el('div', 'empty', 'Nothing here yet.'));
         S.notes.forEach(n => {
             const starred = UI.star.includes(n.id);
@@ -455,6 +481,8 @@ function openLightbox(src) {
     clone.style.maxHeight = '';
     clone.style.width = '';
     clone.style.height = '';
+    clone.removeAttribute('width');
+    clone.removeAttribute('height');
     wrap.append(clone);
 }
 const closeLightbox = () => {
