@@ -44,36 +44,30 @@ This document provides an end-to-end understanding of the Centralized Audit Log 
 ## HLD (High-Level Design)
 ```mermaid
 graph TD
-    Client[Client/Browser] -->|HTTP Request| API[Spring Boot App]
+    Client[Client/Browser] -->|HTTP Request| AOP
     
     subgraph Spring Boot Application
+        direction TB
         AOP[@AuditLog AOP Interceptor]
         Controller[Cost Controller / Service]
+        Producer[Kafka Producer]
+        
         AOP -->|1. Intercept & Pre-state| Controller
-        Controller -->|2. Return Post-state| AOP
+        Controller -.->|2. Return Post-state| AOP
+        AOP -->|3. Fire & Forget Async| Producer
     end
     
     Controller <-->|ACID Transaction| CoreDB[(Oracle/Primary DB)]
     
-    AOP -->|3. Fire & Forget Async| Producer[Kafka Producer]
-    
     Producer -->|4. Publish Event| Kafka[Apache Kafka Topic]
     
     subgraph Audit Service
+        direction TB
         Consumer[Kafka Audit Consumer]
     end
     
     Kafka -->|5. Consume Batch| Consumer
     Consumer -->|6. Append| MongoDB[(MongoDB Audit Store)]
-    
-    %% Styling
-    classDef primary fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef async fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef storage fill:#dfd,stroke:#333,stroke-width:2px;
-    
-    class AOP,Controller primary;
-    class Producer,Kafka,Consumer async;
-    class CoreDB,MongoDB storage;
 ```
 
 ## Deep Dive (Resilience & Scale)
