@@ -232,9 +232,24 @@ button:active { transform: scale(0.97); }
 /* lightbox */
 #lightbox {
   position:fixed; inset:0; z-index:70; background:rgba(6,8,12,.94);
-  display:grid; place-items:center; padding:16px; cursor:zoom-out; overflow:auto;
+  display:flex; flex-direction:column; overflow:hidden;
 }
-#lightbox > * { max-width:100%; max-height:100%; }
+#lb-wrap {
+  flex: 1; overflow: auto; display: flex; padding: 20px;
+  overscroll-behavior: contain;
+}
+#lb-wrap > * {
+  margin: auto; max-width: 100%; max-height: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#lb-wrap.zoomed > * {
+  margin: 0; max-width: none; max-height: none;
+  width: max(200%, 800px);
+}
+.lb-controls {
+  position: absolute; bottom: 0; right: 0; pointer-events: none;
+}
+.lb-fab { pointer-events: auto; }
 
 /* fab */
 .fab {

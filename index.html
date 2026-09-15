@@ -37,7 +37,17 @@
   <button id="fab-switch" class="fab" title="Switch Tickets"><span class="fab-i">☰</span></button>
   <div id="scrim" hidden></div>
   <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true"></div>
-  <div id="lightbox" hidden></div>
+  <div id="lightbox" hidden>
+    <div id="lb-wrap"></div>
+    <div class="lb-controls">
+      <button id="lb-zoom" class="fab lb-fab" title="Zoom" style="bottom: 90px; right: 20px;">
+        <span class="fab-i" id="lb-zoom-i">＋</span>
+      </button>
+      <button id="lb-close" class="fab lb-fab" title="Close" style="bottom: 20px; right: 20px;">
+        <span class="fab-i">✕</span>
+      </button>
+    </div>
+  </div>
   <div id="toasts"></div>
 
   <script type="module">
