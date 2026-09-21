@@ -111,6 +111,9 @@ To optimize resource usage, worker pods dynamically scale. Using Kubernetes Even
 
 ## Question Bank & Strategies
 
+### 0. "How large of document is supported by this system & why? "
+* This system handles reports up to 1 million rows, producing Excel files around 100 to 300 MB. Memory usage stays low and constant because we stream the data, but 1 million rows is our hard limit. That's mainly due to Excel's row cap, the worker pod's temporary disk space during generation, and avoiding long-running database connections
+
 ### 1. "Why did you use SKIP LOCKED instead of standard optimistic locking or basic SELECT FOR UPDATE?"
 * **Strategy:** The interviewer wants to ensure you understand DB locking mechanisms and their performance trade-offs at a deep level.
 * **Sample Answer:** "If I used standard `SELECT FOR UPDATE`, it would block other worker threads from reading the table, causing database lock timeouts and severe thread starvation. I considered optimistic locking, but it requires workers to attempt an update and roll back upon a version collision, which wastes CPU cycles under high contention. `SKIP LOCKED` was the perfect middle ground—it lets workers smoothly slide over already-claimed jobs and lock the next available batch without waiting, maximizing our concurrent throughput."
