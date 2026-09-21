@@ -11,11 +11,12 @@ This document provides an end-to-end understanding of the Production Support Age
 
 ## STAR & Project Context
 * **What is Production Support Agent:** An automated, event-driven AI chatbot designed to accelerate incident response by instantly correlating active production failures with historical fixes and system runbooks.
-* **Situation:** Legacy systems in our organization had a steep learning curve. On-call engineers were wasting hours digging through past Jiras, static runbooks, and historical Teams chats just to gather context on recurring production failures, leading to high Mean Time to Resolution (MTTR).
-* **Task:** The objective was to eliminate manual toil and drastically reduce the time from alert to investigation by automating the context-gathering and initial diagnostic phase.
-* **Action:** I architected and built an event-driven chatbot that intercepts failure webhooks via a message queue. It gathers system logs and queries a vector database (pre-indexed with past Jiras and runbooks) to provide Retrieval-Augmented Generation (RAG) context to an LLM. The LLM then synthesizes a highly contextualized Root Cause Analysis (RCA).
+* **Situation:** most of the legacy systems have steep learning curve. Whenever a production issue comes up, the on call engineer wastes good amount of time going through jiras and confluences to see if this is a reoccurring issue. Along with that trying to understand slang code is a big challenge in itself.
+* **Task:** The goal was to eliminate this reoccurring manual context search through various sources to resolve a given production issue. 
+* **Action:** I built a local chatbot that given a production issue gathers context from procmon, jira confluence and slang code base pass it over to an LLM and provides you with a detailed RCA, and resolution steps.
 * **Result:** This automation significantly cut down the TTR for the entire production support team by eliminating the need to investigate recurring, known issues from scratch. Engineers now receive alerts with historical fixes already attached.
-* **Why we did it (Motivation & Trade-offs):** We chose an asynchronous, queue-based RAG architecture over a synchronous API design to guarantee we never block or impact the underlying monitored legacy systems. We accepted the trade-off of a slight processing delay (seconds for LLM generation) in exchange for highly accurate, actionable RCA outputs.
+* **Why we did it (Motivation & Trade-offs):** when I joined gs a senior who was the sole owner of legacy systems went on paternity leave. So I was assigned to take over his daily tasks, I noticed that many people in the team had very less idea about these systems and often relied on same panic mode when an issue arrived. To overcome this issue I built this chatbot that could be used by anyone.
+
 * **What else we could have done (Alternatives):** We considered relying entirely on standard log-based alerting (e.g., Elasticsearch/Kibana watch rules) with static links to runbooks. This was discarded because it still required the on-call engineer to manually read the runbook, mentally correlate it to the specific stack trace, and search for edge cases, missing the synthesis value that an LLM provides.
 
 ## End-to-End System Architecture
