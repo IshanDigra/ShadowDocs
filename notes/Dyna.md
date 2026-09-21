@@ -13,9 +13,9 @@ This document serves as an end-to-end understanding of the project, tailored for
 ## STAR & Project Context
 
 *   **What is DynaCode:** A Kubernetes sidecar-based diagnostic tool that dynamically analyzes production applications to detect and resolve concurrency and memory issues using AI, without disrupting live traffic.
-*   **Situation:** Debugging live applications by capturing full heap or thread dumps on the main application thread risked triggering long garbage collection (GC) pauses, locking up the JVM, and causing cascading out-of-memory (OOM) pod evictions. Meanwhile, standard static code analysis could not catch complex runtime issues like deadlocks.
-*   **Task:** Build a safe, non-disruptive diagnostic agent for critical production services that could capture thread and memory states, identify complex concurrency bottlenecks, and propose fixes without impacting user traffic.
-*   **Action:** We implemented a Kubernetes sidecar pattern with strictly isolated resource limits (cgroups) to safely extract JVM dumps (`jcmd`/`jstack`). We then built a deterministic scrubbing pipeline to strip PII and idle threads, feeding only the highly focused, sanitized bottleneck data to an internal LLM agent.
+*   **Situation:** In the current development life cycle every engineer does static code anaylsis. i.e looking at the code structure syntactically making sure the if else logic is correct we are using the optimal library or objects but there’s dynamic code analysis that is mostly not done. In Dynamic analysis we analyze the application in a running state looking through the memory usages, thread counts, connection pools or deadlocks. 
+*   **Task:** as part of the hackathon we built a dynamic code analyzer that analyzes critical production services identify complex runtime issues and provide resolutions without impacting user traffic. 
+*   **Action:** we implemented a Kubernetes sidecar pattern with isolated resource (cgroups) to safely extract JVM dumps (jcmd/jstack). We then process it to remove redundant information feeding only the bottleneck data to an internal LLM agent.
 *   **Result:** The system successfully identified root causes for deadlocks and memory leaks in live environments, automatically generated remediation patches, caused zero degradation to live traffic, and won 1st place in a firmwide hackathon.
 *   **Why we did it (Motivation & Trade-offs):** We chose a sidecar architecture to guarantee strict hardware resource isolation. By forcing heavy I/O operations (like writing massive thread dumps) to run against the sidecar's resource quotas, we accepted the trade-off of slightly higher base memory usage per pod in exchange for absolute protection against main-app OOM crashes.
 *   **What else we could have done (Alternatives):** We considered deploying a DaemonSet on the Kubernetes nodes for global observability. However, this was discarded because DaemonSets lack the granular, shared filesystem and PID namespace access required to easily trigger native JVM tools against a specific application container without highly complex, elevated security privileges and host-path mounts. We also considered an in-app APM library, but discarded it as it would share the JVM heap, defeating the purpose of isolating the diagnostic overhead.
@@ -118,3 +118,13 @@ The connection between the Agent Client and the LLM API is designed to fail grac
 **Q5: How do you manage the lifecycle of these dump files? If the sidecar triggers dumps frequently, won't you run out of disk space on the node?**
 *   **Strategy:** Demonstrate operational maturity by anticipating infrastructure degradation over time (e.g., disk exhaustion).
 *   **Sample Answer:** "That was a major operational risk we had to design for. Unchecked file generation will quickly exhaust the `emptyDir` volume and cause pod eviction. To prevent this, I configured the sidecar's local storage as an ephemeral volume with a strict size limit. Additionally, I implemented an automated log-rotation and cleanup script running as a cron job inside the sidecar. Once a dump is parsed, scrubbed, and successfully sent to the AI, the raw, massive dump file is immediately deleted. If the AI API is down, older dumps are evicted based on a FIFO policy to ensure disk utilization never exceeds 80%."
+
+**Q6:  How does this handle non-JVM applications (e.g., Python, Node.js, Go)?**
+Our platform separates **data collection** from **LLM analysis**, making the core architecture completely language-agnostic. 
+
+* **Universal Core:** The Kubernetes sidecar isolation, cgroup limits, data sanitizer, and LLM diagnostic pipeline remain identical across all services.
+* **Pluggable Profiling:** We swap the collection agent inside the sidecar depending on the runtime:
+  * **Python:** Uses `py-spy` to inspect process memory out-of-band without pausing the GIL or modifying code.
+  * **Node.js:** Traces blocked event loops and active call stacks via V8 profiling.
+  * **Go:** Collects goroutine dumps and mutex contention using native `pprof`.
+* **Standardized Output:** Raw runtime snapshots are sanitized into a clean, uniform format before being sent to the LLM for automated troubleshooting.
