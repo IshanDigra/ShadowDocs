@@ -13,9 +13,9 @@ This document provides an end-to-end understanding of the Asynchronous Report Ge
 ## STAR & Project Context
 
 * **What is Asynchronous Report Generation Daemon:** A decoupled, background processing system that shifts heavy data-export workloads from user-facing web servers to dedicated background workers, using a database-backed queue.
-* **Situation:** Users generating large analytical reports were experiencing request timeouts. The synchronous, in-memory processing (using Apache POI `XSSFWorkbook`) caused CPU spikes and exhausted JVM heap limits, leading to frequent Out of Memory (OOM) crashes on our main web pods.
-* **Task:** The core technical challenge was to completely isolate the memory-intensive report generation process from main web traffic to eliminate OOM failures and stabilize the platform.
-* **Action:** I architected and engineered a DB-as-Queue polling engine. I decoupled the heavy computation to standalone Java daemon workers, utilized database-level row locking (`SKIP LOCKED`) for concurrency control, and implemented disk-backed streaming for low-memory Excel generation.
+* **Situation:** We had recently shipped report generation functionality. While generating reports Users faced request timeouts for certain requests. On further analysing the code I noticed that it was a synchronous processing (using Apache POI `XSSFWorkbook`) which for huge files caused request time out and CPU spikes and exhausted JVM heap limits, leading to frequent Out of Memory (OOM) crashes on our main web pods.
+* **Task:** The goal was to completely decouple the memory-intensive report generation process from main pods to eliminate any issues. 
+* **Action:** I built a DB-as-Queue polling system. When User makes an API call instead of synchronous processing user gets a 202 status and in a Jobs table entry gets created. Along with this you have standalone Java daemon workers it pick up jobs and do computation in the background, utilized database-level row locking (`SKIP LOCKED`) for concurrency control, and implemented disk-backed streaming for low-memory Excel generation.
 * **Result:** The new architecture successfully eliminated OOM-related pod failures by 95%, stabilized the user-facing web platform, and provided a highly resilient, scalable way to generate massive reports without dropping requests.
 * **Why we did it (Motivation & Trade-offs):** We chose a Database-as-a-Queue pattern to prioritize system simplicity and transactional integrity. Introducing a dedicated message broker (like Kafka) would have required new infrastructure overhead. We traded slight polling latency and minor DB load for immediate architectural stability and reduced operational complexity.
 * **What else we could have done (Alternatives):** We strongly considered a dedicated message queue (Kafka/RabbitMQ). While an MQ would offer lower latency and better scaling for high-throughput, it was discarded because our throughput requirements were moderate (a few seconds of delay was perfectly acceptable), and we wanted to avoid the operational overhead of managing new infrastructure.
@@ -28,7 +28,7 @@ This document provides an end-to-end understanding of the Asynchronous Report Ge
 * **Benefit/Result:** The user is instantly freed from waiting for the report to generate, preventing HTTP timeouts and freeing up web-server threads immediately.
 
 ### Phase 2: Job Claiming (Integration)
-* **Event/Trigger:** A scheduled cron thread in the worker daemon fires every 5-10 seconds.
+* **Event/Trigger:** A scheduled cron thread in the worker daemon fires every  seconds.
 * **Action/Mechanism:** Workers query the database for `PENDING` jobs using a `SELECT ... FOR UPDATE SKIP LOCKED` query, updating the claimed rows to `PROCESSING`.
 * **Benefit/Result:** Multiple worker pods can operate concurrently without stepping on each other's toes or causing database deadlock, naturally load-balancing the queue.
 
